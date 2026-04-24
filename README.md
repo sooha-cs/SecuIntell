@@ -52,22 +52,6 @@ SecuIntell/
 ├── backend/                # API server & AI integration
 │   ├── src/
 │   └── package.json
-├── docs/                   # Research & markdown files
-│   ├── tool-profiles/
-│   │   ├── dnif-hypercloud.md
-│   │   ├── microsoft-sentinel.md
-│   │   ├── manageengine-log360.md
-│   │   ├── ibm-qradar.md
-│   │   └── elastic-siem.md
-│   ├── compliance/
-│   │   ├── cert-in-mapping.md
-│   │   ├── rbi-csf-mapping.md
-│   │   └── dpdp-act-mapping.md
-│   └── sector-matrices/
-│       ├── bfsi-matrix.md
-│       └── sme-midmarket-matrix.md
-├── .env.example            # Environment variable template
-├── .gitignore
 └── README.md
 ```
 
@@ -79,7 +63,7 @@ SecuIntell/
 |---|---|
 | Frontend | React, Vite, Tailwind CSS |
 | Backend | Node.js / Express |
-| AI Engine | Anthropic Claude API |
+| AI Engine | Google Gemini API |
 | Research Docs | Markdown |
 | Data | Structured JSON / MD compliance tables |
 
@@ -90,11 +74,11 @@ SecuIntell/
 ### Prerequisites
 - Node.js v18+
 - npm or yarn
-- Anthropic API Key
+- Gemini API Key
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/SecuIntell.git
+git clone https://github.com/sooha-cs/SecuIntell.git
 cd SecuIntell
 ```
 
@@ -104,7 +88,7 @@ cp .env.example .env
 ```
 Open `.env` and fill in your values:
 ```
-ANTHROPIC_API_KEY=your_api_key_here
+GEMINI_API_KEY=your_api_key_here
 VITE_API_URL=http://localhost:3000
 ```
 
@@ -140,18 +124,6 @@ Frontend runs at `http://localhost:5173` by default.
 
 ---
 
-## 📊 SIEM Tools Evaluated
-
-| Tool | Deployment | India Compliance Score | Best For |
-|---|---|---|---|
-| DNIF HYPERCLOUD | Cloud / On-prem | ⭐⭐⭐⭐⭐ | India-native SOC teams |
-| ManageEngine Log360 | On-prem | ⭐⭐⭐⭐ | SMEs, mid-market |
-| Microsoft Sentinel | Cloud (Azure) | ⭐⭐⭐⭐ | Azure-heavy enterprises |
-| IBM QRadar | On-prem / Cloud | ⭐⭐⭐ | Large enterprises, MSSPs |
-| Elastic SIEM | Self-hosted | ⭐⭐⭐ | Tech-mature teams, custom deployments |
-
----
-
 ## 👥 Target Audience
 
 - **CISOs** evaluating SIEM procurement for Indian enterprises
@@ -163,10 +135,10 @@ Frontend runs at `http://localhost:5173` by default.
 
 ## 🏆 Hackathon Submission
 
-This project was built as part of **[Hackathon Name]**.
+This project was built as part of **solution-challenge-2026**.
 
 **Track:** Cybersecurity / AI for Security  
-**Team:** [Your Team Name]  
+**Team:** KeepSwimming  
 **Demo:** [Link if deployed]
 
 ---
@@ -181,7 +153,7 @@ This project is licensed under the MIT License. See `LICENSE` for details.
 
 - [CERT-In](https://www.cert-in.org.in/) for regulatory documentation
 - [DNIF](https://dnif.it/) for India-native SIEM reference architecture
-- Anthropic Claude API for powering intelligent analysis
+-  Google Gemini API for powering intelligent analysis
 
 ---
 
