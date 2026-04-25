@@ -1,5 +1,5 @@
 from fastapi import Body
-from google import genai
+from groq import Groq
 import os, json, re
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from bson import ObjectId
@@ -197,14 +197,20 @@ def set_incident_status(incident_id: str, status: str = Query(..., pattern="^(op
 
 @router.post("/explain/{alert_id}")
 def explain_alert(alert_id: str, alert: dict = Body(default=None)):
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="No AI provider configured.")
-    client = genai.Client(api_key=api_key)
+    
+    client = Groq(api_key=api_key)
     prompt = f"""You are a cybersecurity analyst. Explain this security alert in JSON only, no markdown:
     Alert: {json.dumps(alert)}
     Return exactly this JSON structure:
-    {{"what_happened":"...","why_it_matters":"...","attack_stage":"...","llm_provider":"gemini","llm_actions":["action1","action2"],"analyst_notes":"...","risk_score":75,"false_positive_pct":10,"techniques":[{{"id":"T1234","name":"...","tactic":"..."}}]}}"""
-    r = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
-    text = re.sub(r"```json|```", "", r.text).strip()
+    {{"what_happened":"...","why_it_matters":"...","attack_stage":"...","llm_provider":"groq","llm_actions":["action1","action2"],"analyst_notes":"...","risk_score":75,"false_positive_pct":10,"techniques":[{{"id":"T1234","name":"...","tactic":"..."}}]}}"""
+    
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=1024
+    )
+    text = re.sub(r"```json|```", "", response.choices[0].message.content).strip()
     return json.loads(text)
