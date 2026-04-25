@@ -671,44 +671,6 @@ function MitreView() {
   );
 }
 
-// ── AI Status view ────────────────────────────────────────────────────────────
-function AIStatusView() {
-  return (
-    <div className="two-col">
-      <div className="card">
-        <div className="card-header"><span className="card-title"><Icon name="brain" size={14}/>AI Layer Status</span></div>
-        <div className="card-body" style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          {[
-            { label:"LLM Provider",       value:"Offline (set GEMINI_API_KEY)", ok:false },
-            { label:"Anomaly Model",       value:"Isolation Forest ready",       ok:true  },
-            { label:"MITRE Techniques",    value:"38 loaded",                    ok:true  },
-            { label:"Detection Rules",     value:"15 rules across 4 tiers",      ok:true  },
-            { label:"Correlation Engine",  value:"6 attack chains active",       ok:true  },
-          ].map(r => (
-            <div key={r.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
-              <span style={{ fontFamily:"var(--font-mono)", fontSize:12, color:"var(--text-2)" }}>{r.label}</span>
-              <span style={{ fontFamily:"var(--font-mono)", fontSize:12, color:r.ok?"var(--accent)":"var(--high)" }}>{r.value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="card">
-        <div className="card-header"><span className="card-title"><Icon name="info" size={14}/>Configure LLM</span></div>
-        <div className="card-body" style={{ fontSize:13, lineHeight:1.9, color:"var(--text-2)" }}>
-          <p>To enable AI-powered explanations, add your API key to <code style={{ fontFamily:"var(--font-mono)", color:"var(--accent)", background:"var(--bg-hover)", padding:"1px 5px", borderRadius:3 }}>backend/.env</code>:</p>
-          <div style={{ background:"var(--bg-hover)", border:"1px solid var(--border)", borderRadius:4, padding:"12px 14px", marginTop:12, fontFamily:"var(--font-mono)", fontSize:12, lineHeight:2 }}>
-            <div style={{ color:"var(--text-3)" }}># Gemini (recommended)</div>
-            <div>GEMINI_API_KEY=<span style={{ color:"var(--accent)" }}>your_key_here</span></div>
-            <div style={{ color:"var(--text-3)", marginTop:4 }}># Or OpenAI</div>
-            <div>OPENAI_API_KEY=<span style={{ color:"var(--accent)" }}>your_key_here</span></div>
-          </div>
-          <p style={{ marginTop:12 }}>Gemini is tried first. If unavailable, falls back to OpenAI, then to the built-in offline explainer.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Explain panel ─────────────────────────────────────────────────────────────
 function ExplainPanel({ alert, onClose }) {
   const [data, setData]     = useState(null);
