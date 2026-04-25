@@ -1,3 +1,5 @@
+from zipfile import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -6,7 +8,9 @@ from pymongo import ASCENDING, DESCENDING
 from core.database import connect_db, disconnect_db, get_db
 from routes.logs import router as logs_router
 from routes.detection import router as detection_router
-
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 # ── Lifespan: connect / disconnect DB around app lifetime ────────────────────
 @asynccontextmanager
