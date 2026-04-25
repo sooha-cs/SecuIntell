@@ -46,12 +46,41 @@ SecuIntell bridges this gap.
 
 ```
 SecuIntell/
-├── frontend/               # React-based UI
-│   ├── src/
-│   └── package.json
-├── backend/                # API server & AI integration
-│   ├── src/
-│   └── package.json
+├── backend/                    # Python backend (FastAPI)
+│   ├── main.py                 # App entry point
+│   ├── start.py                # Server startup script
+│   ├── core/
+│   │   ├── database.py         # Database connection & config
+│   │   └── .env.example        # Environment variable template
+│   ├── detection/
+│   │   ├── engine.py           # Core detection engine
+│   │   ├── rules.py            # Detection rule definitions
+│   │   ├── anomaly.py          # Anomaly detection logic
+│   │   ├── correlator.py       # Event correlation
+│   │   ├── detection.py        # Detection orchestration
+│   │   └── tests.py            # Unit tests
+│   ├── models/
+│   │   ├── log_model.py        # Log data model
+│   │   └── detection_model.py  # Detection data model
+│   ├── routes/
+│   │   ├── logs.py             # Log ingestion endpoints
+│   │   └── detection.py        # Detection result endpoints
+│   └── schemas/
+│       ├── log_schema.py       # Request/response schemas
+│       └── detection_schema.py
+│
+├── frontend/                   # React + Vite dashboard
+│   ├── index.html
+│   ├── vite.config.js
+│   └── src/
+│       ├── App.jsx             # Root component
+│       ├── main.jsx            # React entry point
+│       └── index.css
+│
+├── simulator/
+│   └── simulator.py            # Log data simulator for testing
+│
+├── .gitignore
 └── README.md
 ```
 
@@ -63,7 +92,7 @@ SecuIntell/
 |---|---|
 | Frontend | React, Vite, Tailwind CSS |
 | Backend | Node.js / Express |
-| AI Engine | Google Gemini API |
+| AI Engine | Grok API |
 | Research Docs | Markdown |
 | Data | Structured JSON / MD compliance tables |
 
@@ -74,7 +103,7 @@ SecuIntell/
 ### Prerequisites
 - Node.js v18+
 - npm or yarn
-- Gemini API Key
+- Grok API Key
 
 ### 1. Clone the repository
 ```bash
@@ -88,8 +117,8 @@ cp .env.example .env
 ```
 Open `.env` and fill in your values:
 ```
-GEMINI_API_KEY=your_api_key_here
-VITE_API_URL=http://localhost:3000
+GROQ_API_KEY=your_api_key_here
+DATABASE_URL=your_database_url_here
 ```
 
 ### 3. Install dependencies & run
@@ -97,9 +126,10 @@ VITE_API_URL=http://localhost:3000
 **Backend:**
 ```bash
 cd backend
-npm install
-npm run dev
+pip install -r requirements.txt
+python start.py
 ```
+Backend runs at http://localhost:8000 by default.
 
 **Frontend:**
 ```bash
@@ -110,18 +140,22 @@ npm run dev
 
 Frontend runs at `http://localhost:5173` by default.
 
+**Run the Log Simulator (optional — for testing)**
+```bash
+    cd simulator
+    python simulator.py
+```
 ---
 
-## 🇮🇳 Indian Regulatory Coverage
-
-| Framework | Coverage |
-|---|---|
-| CERT-In Directive 2022 | ✅ Log retention, incident reporting, 6-hour breach notification |
-| RBI Cyber Security Framework | ✅ BFSI-specific controls, SOC requirements |
-| SEBI Guidelines | ✅ Capital markets cybersecurity mandates |
-| IRDAI Cyber Guidelines | ✅ Insurance sector requirements |
-| DPDP Act 2023 | ✅ Data principal rights, processing obligations |
-
+## 🔌 API Endpoints
+ 
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/logs` | Ingest a new log entry |
+| GET | `/logs` | Retrieve stored logs |
+| GET | `/detection` | Get detection results |
+| POST | `/detection/analyze` | Trigger analysis on logs |
+ 
 ---
 
 ## 👥 Target Audience
@@ -153,7 +187,7 @@ This project is licensed under the MIT License. See `LICENSE` for details.
 
 - [CERT-In](https://www.cert-in.org.in/) for regulatory documentation
 - [DNIF](https://dnif.it/) for India-native SIEM reference architecture
--  Google Gemini API for powering intelligent analysis
+-  Grok API for powering intelligent analysis
 
 ---
 
