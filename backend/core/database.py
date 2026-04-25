@@ -8,10 +8,8 @@ load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME", "secuintell")
 
-# These are initialized properly in connect_db()
 client: MongoClient = None
 db = None
-
 
 def connect_db():
     """Initialize MongoDB Atlas connection and create indexes."""
@@ -32,7 +30,6 @@ def connect_db():
     except ConnectionFailure as e:
         print(f"❌ MongoDB connection failed: {e}")
         raise
-
 
 def disconnect_db():
     """Close the MongoDB connection."""
