@@ -161,6 +161,43 @@ function fmtTimestamp(iso) {
   return new Date(iso).toLocaleString("en-US", { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
 }
 
+// ── usePolling hook ───────────────────────────────────────────────────────────
+// Polls `url` at `intervalMs`. Calls onData(json) on success, onFallback() on
+// network/API failure. Returns { lastPollAt, pollCount, error }.
+function usePolling({ url, intervalMs = 15000, onData, onFallback, enabled = true }) {
+  const [lastPollAt, setLastPollAt] = useState(null);
+  const [pollCount,  setPollCount]  = useState(0);
+  const [error,      setError]      = useState(null);
+  const cbData     = useRef(onData);
+  const cbFallback = useRef(onFallback);
+  useEffect(() => { cbData.current     = onData;     }, [onData]);
+  useEffect(() => { cbFallback.current = onFallback; }, [onFallback]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const poll = async () => {
+      try {
+        if (!url) throw new Error("no url");
+        const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setError(null);
+        cbData.current?.(await res.json());
+      } catch (err) {
+        setError(err.message);
+        cbFallback.current?.();
+      } finally {
+        setLastPollAt(new Date());
+        setPollCount(c => c + 1);
+      }
+    };
+    poll();                               // immediate first call
+    const t = setInterval(poll, intervalMs);
+    return () => clearInterval(t);
+  }, [url, intervalMs, enabled]);
+
+  return { lastPollAt, pollCount, error };
+}
+
 // ── Icons (inline SVG) ────────────────────────────────────────────────────────
 const Icon = ({ name, size=16, color="currentColor" }) => {
   const paths = {
@@ -251,7 +288,7 @@ function Sidebar({ view, setView, counts }) {
     { id:"incidents", icon:"incident", label:"Incidents", badge: counts.incidents, badgeCls: "" },
     { id:"live",      icon:"activity", label:"Live Feed", badge:"LIVE", badgeCls:"ok" },
     { id:"mitre",     icon:"layers",   label:"MITRE ATT&CK" },
-    { id:"ai",        icon:"brain",    label:"AI Status" },
+    { id:"fim",       icon:"eye",      label:"File Integrity", badge: null, badgeCls:"warn" },
   ];
   return (
     <nav className="sidebar">
@@ -561,9 +598,12 @@ function LiveFeedView({ alerts }) {
     const t = setInterval(() => {
       const entry = makeAlert(Date.now());
       entry.timestamp = new Date().toISOString();
-      setFeed(f => [entry, ...f.slice(0,99)]);
-      setNewIds(s => new Set([entry.id, ...s]).values().next() && new Set([entry.id]));
-      setTimeout(() => setNewIds(new Set()), 2000);
+      setFeed(f => [entry, ...f.slice(0, 99)]);
+      // FIX: was using .values().next() short-circuit which always resolved
+      // to a single-item set, losing accumulation. Now correctly adds id then
+      // clears after 2 s via a dedicated timeout per entry.
+      setNewIds(prev => new Set([...prev, entry.id]));
+      setTimeout(() => setNewIds(prev => { const n = new Set(prev); n.delete(entry.id); return n; }), 2000);
     }, rand(2000, 5000));
     return () => clearInterval(t);
   }, [paused]);
@@ -666,6 +706,274 @@ function MitreView() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+    </>
+  );
+}
+
+// ── File Integrity Monitoring ─────────────────────────────────────────────────
+const FIM_BASELINE = [
+  { path:"/etc/passwd",           hash:"a3f1b2c9d4e5f6a7", owner:"root", perms:"644", size:"2.1 KB",  critical:true  },
+  { path:"/etc/sudoers",          hash:"b7e2d3a1c8f4e9b0", owner:"root", perms:"440", size:"756 B",   critical:true  },
+  { path:"/etc/ssh/sshd_config",  hash:"c4d9e1f2a3b7c8d5", owner:"root", perms:"600", size:"3.4 KB",  critical:true  },
+  { path:"/etc/hosts",            hash:"d1a2b3c4e5f6d7e8", owner:"root", perms:"644", size:"221 B",   critical:false },
+  { path:"/var/log/auth.log",     hash:"e8f7a6b5c4d3e2f1", owner:"syslog",perms:"640", size:"14.2 KB", critical:false },
+  { path:"/usr/bin/sudo",         hash:"f2e3d4c5b6a7f8e9", owner:"root", perms:"4755", size:"182 KB",  critical:true  },
+  { path:"/etc/crontab",          hash:"a9b8c7d6e5f4a3b2", owner:"root", perms:"644", size:"1.1 KB",  critical:true  },
+  { path:"/home/ubuntu/.bashrc",  hash:"b3c4d5e6f7a8b9c0", owner:"ubuntu",perms:"644", size:"3.7 KB",  critical:false },
+  { path:"/etc/nginx/nginx.conf", hash:"c0d1e2f3a4b5c6d7", owner:"root", perms:"644", size:"2.8 KB",  critical:false },
+  { path:"/usr/local/bin/deploy", hash:"d7e8f9a0b1c2d3e4", owner:"deploy",perms:"755", size:"48 KB",   critical:false },
+];
+const FIM_CHANGE_TYPES = ["MODIFIED","MODIFIED","MODIFIED","DELETED","PERMISSION_CHANGED","OWNER_CHANGED"];
+function newHash() { return [...Array(16)].map(()=>Math.floor(Math.random()*16).toString(16)).join(""); }
+function makeFIMEvent(file, seq) {
+  const type = FIM_CHANGE_TYPES[rand(0, FIM_CHANGE_TYPES.length - 1)];
+  return {
+    id: `fim_${seq}_${Date.now()}`,
+    path: file.path,
+    change_type: type,
+    severity: file.critical ? (type === "DELETED" ? "CRITICAL" : "HIGH") : "MEDIUM",
+    old_hash: file.hash,
+    new_hash: type === "DELETED" ? null : newHash(),
+    old_perms: file.perms,
+    new_perms: type === "PERMISSION_CHANGED" ? `${rand(600,777)}` : file.perms,
+    old_owner: file.owner,
+    new_owner: type === "OWNER_CHANGED" ? USERS[rand(0, USERS.length - 1)] : file.owner,
+    detected_at: new Date().toISOString(),
+    acknowledged: false,
+  };
+}
+
+function FIMView() {
+  const [baseline]   = useState(() => FIM_BASELINE.map(f => ({ ...f, status:"clean", last_scan: new Date().toISOString() })));
+  const [files,      setFiles]      = useState(() => baseline.map(f => ({ ...f })));
+  const [events,     setEvents]     = useState([]);
+  const [scanning,   setScanning]   = useState(false);
+  const [scanCount,  setScanCount]  = useState(0);
+  const [lastScan,   setLastScan]   = useState(null);
+  const [interval_,  setInterval_]  = useState(20);   // seconds
+  const [filter,     setFilter]     = useState("ALL");
+  const [ackIds,     setAckIds]     = useState(new Set());
+  const seqRef = useRef(0);
+
+  // Run one FIM scan: randomly tamper 0–2 files
+  const runScan = useCallback(() => {
+    setScanning(true);
+    setTimeout(() => {
+      const newEvents = [];
+      const updatedFiles = files.map(f => ({ ...f, last_scan: new Date().toISOString() }));
+
+      // 40% chance to detect 1 change, 15% chance to detect 2
+      const numChanges = Math.random() < 0.15 ? 2 : Math.random() < 0.40 ? 1 : 0;
+      const targets = [...updatedFiles].sort(() => Math.random() - 0.5).slice(0, numChanges);
+      targets.forEach(target => {
+        seqRef.current += 1;
+        const ev = makeFIMEvent(target, seqRef.current);
+        newEvents.push(ev);
+        const idx = updatedFiles.findIndex(f => f.path === target.path);
+        if (idx !== -1) {
+          updatedFiles[idx] = {
+            ...updatedFiles[idx],
+            status: ev.change_type === "DELETED" ? "deleted" : "tampered",
+            hash:   ev.new_hash ?? updatedFiles[idx].hash,
+            perms:  ev.new_perms,
+            owner:  ev.new_owner,
+          };
+        }
+      });
+
+      setFiles(updatedFiles);
+      if (newEvents.length) setEvents(prev => [...newEvents, ...prev].slice(0, 200));
+      setScanCount(c => c + 1);
+      setLastScan(new Date());
+      setScanning(false);
+    }, rand(800, 1800));   // simulate scan duration
+  }, [files]);
+
+  // Auto-scan
+  useEffect(() => {
+    const t = setInterval(runScan, interval_ * 1000);
+    return () => clearInterval(t);
+  }, [runScan, interval_]);
+
+  const tamperedCount  = files.filter(f => f.status === "tampered").length;
+  const deletedCount   = files.filter(f => f.status === "deleted").length;
+  const unackEvents    = events.filter(e => !ackIds.has(e.id));
+  const shownEvents    = filter === "ALL" ? events : events.filter(e => e.severity === filter || e.change_type === filter);
+
+  const statusColor = { clean:"var(--accent)", tampered:"var(--high)", deleted:"var(--crit)" };
+  const sevColor    = { CRITICAL:"var(--crit)", HIGH:"var(--high)", MEDIUM:"var(--med)", LOW:"var(--low)" };
+  const changeIcon  = { MODIFIED:"✎", DELETED:"✗", PERMISSION_CHANGED:"⚿", OWNER_CHANGED:"👤" };
+
+  return (
+    <>
+      {/* Summary bar */}
+      <div className="stats-grid" style={{ gridTemplateColumns:"repeat(4,1fr)" }}>
+        {[
+          { label:"Watched Files",   value: files.length,                           sub:"in baseline" },
+          { label:"Clean",           value: files.filter(f=>f.status==="clean").length, sub:"no changes" },
+          { label:"Tampered",        value: tamperedCount,  sub:"hash/perm/owner mismatch", color:"var(--high)" },
+          { label:"Unacked Alerts",  value: unackEvents.length, sub:"need acknowledgement", color: unackEvents.length>0?"var(--crit)":undefined },
+        ].map(s => (
+          <div key={s.label} className="stat-card">
+            <div className="stat-label">{s.label}</div>
+            <div className="stat-value" style={{ color: s.color }}>{s.value}</div>
+            <div className="stat-delta">{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Controls */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title"><Icon name="shield" size={14}/>File Integrity Monitor</span>
+          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+            <span style={{ fontSize:11, fontFamily:"var(--font-mono)", color:"var(--text-dim,#5a7a85)" }}>
+              Scan #{scanCount} · interval {interval_}s
+              {lastScan && ` · last ${lastScan.toLocaleTimeString()}`}
+            </span>
+            <select
+              value={interval_}
+              onChange={e => setInterval_(Number(e.target.value))}
+              style={{ background:"var(--surface,#0b1618)", border:"1px solid var(--border,#1a3038)", color:"var(--text,#c8dde2)", borderRadius:4, padding:"3px 8px", fontSize:12, fontFamily:"var(--font-mono,monospace)" }}>
+              {[10,20,30,60].map(v=><option key={v} value={v}>{v}s</option>)}
+            </select>
+            <button className="btn primary" onClick={runScan} disabled={scanning}
+              style={{ display:"flex", alignItems:"center", gap:6 }}>
+              {scanning
+                ? <><div className="spinner" style={{ width:10, height:10 }} /> Scanning…</>
+                : <><Icon name="refresh" size={12}/> Scan Now</>}
+            </button>
+          </div>
+        </div>
+
+        {/* File table */}
+        <div style={{ overflowX:"auto" }}>
+          <table className="data-table">
+            <thead><tr>
+              <th>Status</th><th>Path</th><th>Critical</th>
+              <th>Hash</th><th>Perms</th><th>Owner</th><th>Last Scan</th>
+            </tr></thead>
+            <tbody>
+              {files.map(f => (
+                <tr key={f.path} style={{ opacity: f.status==="deleted" ? 0.55 : 1 }}>
+                  <td>
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:5,
+                      color: statusColor[f.status], fontFamily:"var(--font-mono,monospace)", fontSize:11, fontWeight:600 }}>
+                      <span style={{ width:7, height:7, borderRadius:"50%", background:statusColor[f.status], display:"inline-block" }}/>
+                      {f.status.toUpperCase()}
+                    </span>
+                  </td>
+                  <td style={{ fontFamily:"var(--font-mono,monospace)", fontSize:11, color:"var(--text,#c8dde2)" }}>{f.path}</td>
+                  <td style={{ textAlign:"center" }}>
+                    {f.critical && <span style={{ color:"var(--crit,#ff4560)", fontSize:12 }}>⚑</span>}
+                  </td>
+                  <td style={{ fontFamily:"var(--font-mono,monospace)", fontSize:10, color:"var(--text-dim,#5a7a85)" }}>
+                    {f.hash?.slice(0,8)}…
+                  </td>
+                  <td style={{ fontFamily:"var(--font-mono,monospace)", fontSize:11 }}>{f.perms}</td>
+                  <td style={{ fontSize:11, color:"var(--text,#c8dde2)" }}>{f.owner}</td>
+                  <td style={{ fontFamily:"var(--font-mono,monospace)", fontSize:10, color:"var(--text-dim,#5a7a85)" }}>
+                    {f.last_scan ? new Date(f.last_scan).toLocaleTimeString() : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* FIM event log */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title"><Icon name="activity" size={14}/>Integrity Event Log</span>
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            {unackEvents.length > 0 && (
+              <button className="btn" style={{ fontSize:11 }}
+                onClick={() => setAckIds(prev => new Set([...prev, ...unackEvents.map(e=>e.id)]))}>
+                Ack All ({unackEvents.length})
+              </button>
+            )}
+            {["ALL","CRITICAL","HIGH","MEDIUM","MODIFIED","DELETED","PERMISSION_CHANGED"].map(f => (
+              <button key={f} className={`filter-btn ${filter===f?"active":""}`}
+                onClick={() => setFilter(f)} style={{ fontSize:10 }}>{f}</button>
+            ))}
+          </div>
+        </div>
+
+        {shownEvents.length === 0 ? (
+          <div className="empty-state" style={{ padding:32 }}>
+            {events.length === 0
+              ? "No integrity events yet — waiting for next scan…"
+              : "No events match current filter"}
+          </div>
+        ) : (
+          <div style={{ overflowY:"auto", maxHeight:"420px" }}>
+            {shownEvents.map(ev => {
+              const acked = ackIds.has(ev.id);
+              return (
+                <div key={ev.id} style={{
+                  padding:"12px 16px",
+                  borderBottom:"1px solid rgba(255,255,255,0.04)",
+                  opacity: acked ? 0.45 : 1,
+                  display:"flex", gap:14, alignItems:"flex-start",
+                  background: acked ? "transparent" : `${sevColor[ev.severity]}08`,
+                }}>
+                  {/* Change type icon */}
+                  <div style={{ fontSize:18, lineHeight:1, color:sevColor[ev.severity], width:20, flexShrink:0, marginTop:2 }}>
+                    {changeIcon[ev.change_type] || "?"}
+                  </div>
+
+                  <div style={{ flex:1, minWidth:0 }}>
+                    {/* Top row */}
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
+                      <span className={`badge ${ev.severity}`}>{ev.severity}</span>
+                      <span style={{ fontFamily:"var(--font-mono,monospace)", fontSize:11,
+                        color:sevColor[ev.severity], background:`${sevColor[ev.severity]}18`,
+                        border:`1px solid ${sevColor[ev.severity]}40`, borderRadius:3, padding:"1px 6px" }}>
+                        {ev.change_type.replace(/_/g," ")}
+                      </span>
+                      <span style={{ fontFamily:"var(--font-mono,monospace)", fontSize:12, color:"var(--text,#c8dde2)", fontWeight:600 }}>
+                        {ev.path}
+                      </span>
+                    </div>
+
+                    {/* Hash diff */}
+                    {ev.change_type === "MODIFIED" && (
+                      <div style={{ display:"flex", gap:8, fontSize:10, fontFamily:"var(--font-mono,monospace)",
+                        color:"var(--text-dim,#5a7a85)", marginBottom:4, flexWrap:"wrap" }}>
+                        <span>OLD: <span style={{ color:"var(--crit,#ff4560)" }}>{ev.old_hash}</span></span>
+                        <span>→</span>
+                        <span>NEW: <span style={{ color:"var(--warn,#f5a623)" }}>{ev.new_hash}</span></span>
+                      </div>
+                    )}
+
+                    {/* Perm/owner diff */}
+                    {(ev.change_type === "PERMISSION_CHANGED" || ev.change_type === "OWNER_CHANGED") && (
+                      <div style={{ fontSize:10, fontFamily:"var(--font-mono,monospace)", color:"var(--text-dim,#5a7a85)", marginBottom:4 }}>
+                        {ev.change_type === "PERMISSION_CHANGED"
+                          ? <>{`perms: `}<span style={{color:"var(--crit)"}}>{ev.old_perms}</span>{` → `}<span style={{color:"var(--warn)"}}>{ev.new_perms}</span></>
+                          : <>{`owner: `}<span style={{color:"var(--crit)"}}>{ev.old_owner}</span>{` → `}<span style={{color:"var(--warn)"}}>{ev.new_owner}</span></>}
+                      </div>
+                    )}
+
+                    <div style={{ fontSize:10, fontFamily:"var(--font-mono,monospace)", color:"var(--text-dim,#5a7a85)" }}>
+                      {new Date(ev.detected_at).toLocaleString()}
+                    </div>
+                  </div>
+
+                  {/* Ack button */}
+                  {!acked && (
+                    <button className="btn" style={{ fontSize:10, flexShrink:0 }}
+                      onClick={() => setAckIds(prev => new Set([...prev, ev.id]))}>
+                      Ack
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </>
   );
@@ -865,11 +1173,11 @@ function ExplainPanel({ alert, onClose }) {
 
 // ── Root App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [view, setView]           = useState("dashboard");
+  const [view, setView]                 = useState("dashboard");
   const [explainAlert, setExplainAlert] = useState(null);
-  const [connected, setConnected] = useState(false);
-  const [alerts]    = useState(() => MOCK_ALERTS);
-  const [incidents] = useState(() => MOCK_INCIDENTS);
+  const [connected, setConnected]       = useState(false);
+  const [alerts,    setAlerts]          = useState(() => MOCK_ALERTS);
+  const [incidents, setIncidents]       = useState(() => MOCK_INCIDENTS);
 
   // Live clock
   useEffect(() => {
@@ -882,12 +1190,64 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  // Check backend connectivity
-  useEffect(() => {
-    fetch(`${API}/`).then(() => setConnected(true)).catch(() => setConnected(false));
+  // ── Polling: alerts ───────────────────────────────────────────────────────
+  // Tries GET /alerts every 15 s. On API failure, injects 1–3 fresh mock
+  // events so the dashboard never goes stale in demo mode.
+  const handleAlertData = useCallback((json) => {
+    const incoming = Array.isArray(json) ? json : Array.isArray(json?.alerts) ? json.alerts : null;
+    // Only replace state if the backend actually returned alerts.
+    // An empty array means the endpoint exists but has no data yet —
+    // keep existing alerts so the UI never goes blank.
+    if (incoming && incoming.length > 0) setAlerts(incoming);
+    setConnected(true);
   }, []);
 
-  const openCritical = alerts.filter(a => a.severity === "CRITICAL" && a.status === "open").length;
+  const handleAlertFallback = useCallback(() => {
+    setConnected(false);
+    // Inject fresh mock events to simulate live ingestion
+    const count = rand(1, 3);
+    const fresh = Array.from({ length: count }, (_, i) => {
+      const a = makeAlert(Date.now() + i);
+      a.timestamp = new Date().toISOString();
+      a.created_at = new Date().toISOString();
+      return a;
+    });
+    setAlerts(prev => {
+      const merged = [...fresh, ...prev];
+      // Deduplicate by id, keep newest 60
+      const seen = new Set();
+      return merged.filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; }).slice(0, 60);
+    });
+  }, []);
+
+  const { lastPollAt, pollCount, error: pollError } = usePolling({
+    url:         `${API}/alerts`,
+    intervalMs:  15000,
+    onData:      handleAlertData,
+    onFallback:  handleAlertFallback,
+  });
+
+  // ── Polling: incidents ────────────────────────────────────────────────────
+  usePolling({
+    url:        `${API}/incidents`,
+    intervalMs: 30000,
+    onData:     useCallback((json) => {
+      const incoming = Array.isArray(json) ? json : Array.isArray(json?.incidents) ? json.incidents : null;
+      if (incoming && incoming.length > 0) setIncidents(incoming);
+    }, []),
+    onFallback: useCallback(() => {
+      // Simulate occasional incident status changes in demo mode
+      if (Math.random() < 0.3) {
+        setIncidents(prev => prev.map(inc =>
+          inc.status === "open" && Math.random() < 0.2
+            ? { ...inc, status:"investigating", last_seen: new Date().toISOString() }
+            : inc
+        ));
+      }
+    }, []),
+  });
+
+  const openCritical  = alerts.filter(a => a.severity === "CRITICAL" && a.status === "open").length;
   const openIncidents = incidents.filter(i => i.status !== "resolved").length;
   const stats = { openCritical };
 
@@ -897,14 +1257,18 @@ export default function App() {
     incidents: <IncidentsView incidents={incidents} />,
     live:      <LiveFeedView  alerts={alerts} />,
     mitre:     <MitreView />,
-    ai:        <AIStatusView />,
+    fim:       <FIMView />,
   };
 
   const PAGE_TITLES = {
-    dashboard: "Dashboard",   alerts: "Alerts",
-    incidents: "Incidents",   live:   "Live Feed",
-    mitre:     "MITRE ATT&CK", ai:    "AI Status",
+    dashboard: "Dashboard",      alerts: "Alerts",
+    incidents: "Incidents",      live:   "Live Feed",
+    mitre:     "MITRE ATT&CK",  fim:    "File Integrity Monitoring",
   };
+
+  const pollStatus = connected
+    ? `Connected → ${API} · poll #${pollCount} · ${lastPollAt?.toLocaleTimeString() ?? "—"}`
+    : `Demo mode · ${pollError ?? "backend unreachable"} · mock refresh every 15 s`;
 
   return (
     <div className="shell">
@@ -912,10 +1276,8 @@ export default function App() {
       <Sidebar view={view} setView={setView} counts={{ open:openCritical, incidents:openIncidents }} />
       <main className="main">
         <div>
-          <div className="page-title">
-            {PAGE_TITLES[view]}
-          </div>
-          <div className="page-sub">{connected ? `Connected → ${API}` : `Demo mode — backend not reachable at ${API}`}</div>
+          <div className="page-title">{PAGE_TITLES[view]}</div>
+          <div className="page-sub">{pollStatus}</div>
         </div>
         {VIEWS[view]}
       </main>
