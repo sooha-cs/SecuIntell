@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from schemas.log_schema import LogCreate, LogResponse, PaginatedLogs, LogStats
 from models.log_model import (
     insert_log,
@@ -7,28 +7,51 @@ from models.log_model import (
     get_log_by_id,
     get_stats,
 )
+from detection.engine import detection_engine
+from core.database import get_db
 
 router = APIRouter(prefix="/logs", tags=["Logs"])
 
 
+# ── Detection bridge ──────────────────────────────────────────────────────────
+def _run_detection(log: dict):
+    """Run the full detection pipeline on a stored log (called in background)."""
+    try:
+        db = get_db()
+        detection_engine.analyze(log, db=db)
+    except Exception as e:
+        print(f"⚠️  Detection error for log {log.get('id','?')}: {e}")
+
+
 # ── POST /logs  — ingest a single log ────────────────────────────────────────
 @router.post("/", response_model=LogResponse, status_code=201)
-def create_log(log: LogCreate):
+def create_log(log: LogCreate, background_tasks: BackgroundTasks):
     """
     Ingest a single log event.
-    Called by the simulator, agents, or any external source.
+    Automatically runs detection pipeline in background → populates alerts + incidents.
     """
     stored = insert_log(log)
+    background_tasks.add_task(_run_detection, stored)
     return stored
 
 
 # ── POST /logs/bulk  — ingest many logs at once ───────────────────────────────
 @router.post("/bulk", status_code=201)
-def create_logs_bulk(logs: list[LogCreate]):
-    """Batch-ingest up to 500 log events in one request."""
+def create_logs_bulk(logs: list[LogCreate], background_tasks: BackgroundTasks):
+    """Batch-ingest up to 500 log events. Detection runs in background for each."""
     if len(logs) > 500:
         raise HTTPException(status_code=400, detail="Maximum 500 logs per bulk request.")
     count = insert_bulk_logs(logs)
+
+    def _run_bulk_detection(log_list: list[LogCreate]):
+        db = get_db()
+        for log in log_list:
+            try:
+                detection_engine.analyze(log, db=db)
+            except Exception as e:
+                print(f"⚠️  Bulk detection error: {e}")
+
+    background_tasks.add_task(_run_bulk_detection, logs)
     return {"status": "ok", "inserted": count}
 
 
