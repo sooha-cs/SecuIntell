@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: secuintell-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false          # Set manually in Render dashboard — never commit this value
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        sync: false          # Set to your Vercel URL after frontend deploys, e.g. https://secuintell.vercel.app
+    autoDeploy: true
