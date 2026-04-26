@@ -123,7 +123,11 @@ RULES: list[DetectionRule] = [
         tactic="Exfiltration",
         technique="T1041",
         priority=100,
-        conditions=[Condition(pattern=r"exfiltrat|data.{0,15}(transfer|leak|dump|export)", field="message")],
+        match_mode="ANY",
+        conditions=[
+            Condition(pattern=r"exfiltrat|data.{0,15}(transfer|leak|dump|export)|outbound.{0,20}(volume|data|traffic)", field="message"),
+            Condition(pattern=r"DATA_EXFILTRATION", field="event_type"),
+        ],
     ),
 
     DetectionRule(
@@ -134,8 +138,11 @@ RULES: list[DetectionRule] = [
         tactic="Privilege Escalation",
         technique="T1548",
         priority=95,
+        match_mode="ANY",
         conditions=[
-            Condition(pattern=r"privilege.{0,10}escalat|sudo.{0,15}(fail|error|denied)|setuid|setgid|suid", field="message"),
+            # Covers "privilege escalation" AND "escalated privileges" (both word orders)
+            Condition(pattern=r"privilege.{0,15}escalat|escalat.{0,15}privilege|sudo.{0,15}(fail|error|denied)|setuid|setgid|suid", field="message"),
+            Condition(pattern=r"PRIVILEGE_ESCALATION", field="event_type"),
         ],
     ),
 
@@ -149,7 +156,11 @@ RULES: list[DetectionRule] = [
         tactic="Credential Access",
         technique="T1110",
         priority=85,
-        conditions=[Condition(pattern=r"brute.?force|multiple.{0,10}fail|repeated.{0,10}(login|auth)", field="message")],
+        match_mode="ANY",
+        conditions=[
+            Condition(pattern=r"brute.?force|multiple.{0,10}fail|repeated.{0,10}(login|auth)", field="message"),
+            Condition(pattern=r"BRUTE_FORCE", field="event_type"),
+        ],
     ),
 
     DetectionRule(
@@ -171,7 +182,11 @@ RULES: list[DetectionRule] = [
         tactic="Lateral Movement",
         technique="T1021",
         priority=80,
-        conditions=[Condition(pattern=r"lateral.{0,10}move|psexec|wmiexec|pass.?the.?hash|impacket|smb.{0,10}(login|connect)", field="message")],
+        match_mode="ANY",
+        conditions=[
+            Condition(pattern=r"lateral.{0,10}move|psexec|wmiexec|pass.?the.?hash|impacket|smb.{0,10}(login|connect)", field="message"),
+            Condition(pattern=r"LATERAL_MOVEMENT", field="event_type"),
+        ],
     ),
 
     DetectionRule(
@@ -252,6 +267,36 @@ RULES: list[DetectionRule] = [
         technique="T1078",
         priority=45,
         conditions=[Condition(pattern=r"(01|02|03|04|05):\d{2}:\d{2}", field="message")],
+    ),
+
+    DetectionRule(
+        id="R016",
+        name="File Integrity Violation",
+        description="Critical system file modified, deleted, or permission changed by unauthorised actor.",
+        severity="CRITICAL",
+        tactic="Defense Evasion",
+        technique="T1565.001",
+        priority=98,
+        match_mode="ANY",
+        conditions=[
+            Condition(pattern=r"file.{0,20}(integrity|tamper|hash.{0,10}mismatch|modif)", field="message"),
+            Condition(pattern=r"FILE_TAMPER", field="event_type"),
+        ],
+    ),
+
+    DetectionRule(
+        id="R017",
+        name="Suspicious Successful Authentication",
+        description="AUTH_SUCCESS following brute-force or from unusual source — possible credential compromise.",
+        severity="HIGH",
+        tactic="Initial Access",
+        technique="T1078",
+        priority=88,
+        match_mode="ANY",
+        conditions=[
+            Condition(pattern=r"compromised.{0,20}credential|ssh.{0,15}login.{0,15}(attacker|unusual|foreign)", field="message"),
+            Condition(pattern=r"AUTH_SUCCESS", field="event_type"),
+        ],
     ),
 
     # ── LOW ───────────────────────────────────────────────────────────────────
