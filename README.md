@@ -23,8 +23,6 @@ SecuIntell solves this by providing:
 - **Real-time threat detection** with a rule-based engine (15 rules), Isolation Forest anomaly detection, and sliding-window correlation
 - **AI-powered alert explanations** using Groq API — risk assessment, MITRE ATT&CK mapping, attack stage classification, and suggested playbooks
 - **Structured tool evaluations** using a consistent rubric across all major SIEM vendors
-- **Indian compliance mapping** across CERT-In, RBI, SEBI, IRDAI, and the DPDP Act
-- **Sector-specific scoring matrices** for BFSI and SME/mid-market segments
 - **An interactive dashboard** to monitor alerts, incidents, and live log feeds
 
 ---
@@ -32,11 +30,11 @@ SecuIntell solves this by providing:
 ## 🧩 Problem Statement
 
 The Indian SIEM market is growing at **13% CAGR**, yet procurement decisions are often made without:
-- Alignment to Indian regulatory frameworks (CERT-In Directive 2022, DPDP Act, RBI CSF)
-- Sector-specific weighting (a bank's needs ≠ a mid-market SaaS company's needs)
-- Practical SOC usability benchmarks relevant to Indian team sizes and skill sets
+    - Alignment to Indian regulatory frameworks (CERT-In Directive 2022, DPDP Act, RBI CSF)
+    - Sector-specific weighting (a bank's needs ≠ a mid-market SaaS company's needs)
+    - Practical SOC usability benchmarks relevant to Indian team sizes and skill sets
 
-SecuIntell bridges this gap.
+SecuIntell aims to bridge this gap.
 
 ---
 
@@ -49,7 +47,6 @@ SecuIntell bridges this gap.
 | 🤖 AI Explain | Groq-powered natural language explanation for any alert — what happened, why it matters, suggested actions |
 | 📡 Live Feed | Real-time log ingestion stream with source IP, event type, and host tracking |
 | 🧠 Detection Engine | Rule-based (15 rules) + Isolation Forest anomaly detection + 6 attack chain correlators |
-| 🔍 Tool Profiles | In-depth evaluations of DNIF HYPERCLOUD, Microsoft Sentinel, ManageEngine Log360, IBM QRadar, Elastic SIEM |
 
 ---
 
