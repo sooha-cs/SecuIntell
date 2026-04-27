@@ -3,7 +3,7 @@ from pymongo.errors import ConnectionFailure
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+load_dotenv("/etc/secrets/.env")
 
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME", "secuintell")
