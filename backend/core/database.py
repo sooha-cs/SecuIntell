@@ -13,6 +13,7 @@ db = None
 
 def connect_db():
     """Initialize MongoDB Atlas connection and create indexes."""
+     print(f"DEBUG MONGO_URI = {MONGO_URI}")
     global client, db
     try:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
