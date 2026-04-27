@@ -205,7 +205,7 @@ def explain_alert(alert_id: str, alert: dict = Body(default=None)):
     prompt = f"""You are a cybersecurity analyst. Explain this security alert in JSON only, no markdown:
     Alert: {json.dumps(alert)}
     Return exactly this JSON structure:
-    {{"what_happened":"...","why_it_matters":"...","attack_stage":"...","llm_provider":"groq","llm_actions":["action1","action2"],"analyst_notes":"...","risk_score":75,"false_positive_pct":10,"techniques":[{{"id":"T1234","name":"...","tactic":"..."}}]}}"""
+    {{"what_happened":"...","why_it_matters":"...","attack_stage":"...","llm_provider":"groq","llm_actions":["action1","action2"],"analyst_notes":"...","risk_score":<integer 0-100 based on severity and context>,"false_positive_pct":<integer 0-100 based on severity and context>,"techniques":[{{"id":"T1234","name":"...","tactic":"..."}}]}}"""
     
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
