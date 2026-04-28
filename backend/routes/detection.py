@@ -1,5 +1,7 @@
 from fastapi import Body
 from groq import Groq
+import google.generativeai as genai
+import logging
 import os, json, re
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from bson import ObjectId
@@ -20,6 +22,7 @@ from models.detection_model import (
 from models.log_model import get_log_by_id
 
 router = APIRouter(tags=["Detection"])
+logger = logging.getLogger(__name__)
 
 
 # ════════════════════════════════════════════════════════
@@ -195,22 +198,95 @@ def set_incident_status(incident_id: str, status: str = Query(..., pattern="^(op
     return {"status": "updated", "incident_id": incident_id, "new_status": status}
 
 
-@router.post("/explain/{alert_id}")
-def explain_alert(alert_id: str, alert: dict = Body(default=None)):
+# ════════════════════════════════════════════════════════
+#  EXPLAIN  (Groq primary → Gemini fallback)
+# ════════════════════════════════════════════════════════
+
+def _build_prompt(alert: dict) -> str:
+    """Shared prompt template — identical for both providers."""
+    return (
+        "You are a cybersecurity analyst. Explain this security alert in JSON only, no markdown:\n"
+        f"Alert: {json.dumps(alert)}\n"
+        "Return exactly this JSON structure:\n"
+        '{"what_happened":"...","why_it_matters":"...","attack_stage":"...",'
+        '"llm_provider":"...","llm_actions":["action1","action2"],'
+        '"analyst_notes":"...","risk_score":<integer 0-100>,'
+        '"false_positive_pct":<integer 0-100>,'
+        '"techniques":[{"id":"T1234","name":"...","tactic":"..."}]}'
+    )
+
+
+def _explain_with_groq(prompt: str) -> dict:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="No AI provider configured.")
-    
+        raise RuntimeError("GROQ_API_KEY not set.")
     client = Groq(api_key=api_key)
-    prompt = f"""You are a cybersecurity analyst. Explain this security alert in JSON only, no markdown:
-    Alert: {json.dumps(alert)}
-    Return exactly this JSON structure:
-    {{"what_happened":"...","why_it_matters":"...","attack_stage":"...","llm_provider":"groq","llm_actions":["action1","action2"],"analyst_notes":"...","risk_score":<integer 0-100 based on severity and context>,"false_positive_pct":<integer 0-100 based on severity and context>,"techniques":[{{"id":"T1234","name":"...","tactic":"..."}}]}}"""
-    
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=1024
+        max_tokens=1024,
     )
     text = re.sub(r"```json|```", "", response.choices[0].message.content).strip()
-    return json.loads(text)
+    result = json.loads(text)
+    result["llm_provider"] = "groq"
+    return result
+
+
+def _explain_with_gemini(prompt: str) -> dict:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY not set.")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    response = model.generate_content(prompt)
+    text = re.sub(r"```json|```", "", response.text).strip()
+    result = json.loads(text)
+    result["llm_provider"] = "gemini"
+    return result
+
+
+@router.post("/explain/{alert_id}")
+def explain_alert(
+    alert_id: str,
+    provider: str = Query("groq", pattern="^(groq|gemini)$"),
+    alert: dict = Body(default=None),
+):
+    """
+    Explain a security alert using an LLM.
+
+    ?provider=groq   (default) — uses Groq / llama-3.3-70b, falls back to Gemini on failure
+    ?provider=gemini           — calls Gemini 1.5 Flash directly, no fallback
+    """
+    if not alert:
+        raise HTTPException(status_code=400, detail="Alert body is required.")
+
+    prompt = _build_prompt(alert)
+
+    # ── Explicit Gemini request ───────────────────────────────────────────
+    if provider == "gemini":
+        try:
+            return _explain_with_gemini(prompt)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Gemini error: {exc}")
+
+    # ── Groq (default) with automatic Gemini fallback ────────────────────
+    try:
+        return _explain_with_groq(prompt)
+
+    except Exception as groq_err:
+        logger.warning("Groq explain failed (%s) — trying Gemini fallback.", groq_err)
+        try:
+            result = _explain_with_gemini(prompt)
+            result["fallback"] = True
+            return result
+        except Exception as gemini_err:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"Both providers failed. "
+                    f"Groq: {groq_err}. "
+                    f"Gemini: {gemini_err}."
+                ),
+            )
