@@ -21,8 +21,7 @@ India's cybersecurity landscape is uniquely complex; containing multi-layered re
 
 SecuIntell solves this by providing:
 - **Real-time threat detection** with a rule-based engine (15 rules), Isolation Forest anomaly detection, and sliding-window correlation
-- **AI-powered alert explanations** using Groq API — risk assessment, MITRE ATT&CK mapping, attack stage classification, and suggested playbooks
-- **Structured tool evaluations** using a consistent rubric across all major SIEM vendors
+- **AI-powered alert explanations** using Gemini/Groq API — risk assessment, MITRE ATT&CK mapping, attack stage classification, and suggested playbooks
 - **An interactive dashboard** to monitor alerts, incidents, and live log feeds
 
 ---
@@ -31,7 +30,6 @@ SecuIntell solves this by providing:
 
 The Indian SIEM market is growing at **13% CAGR**, yet procurement decisions are often made without:
     - Alignment to Indian regulatory frameworks (CERT-In Directive 2022, DPDP Act, RBI CSF)
-    - Sector-specific weighting (a bank's needs ≠ a mid-market SaaS company's needs)
     - Practical SOC usability benchmarks relevant to Indian team sizes and skill sets
 
 SecuIntell aims to bridge this gap.
@@ -104,7 +102,7 @@ SecuIntell/
 | Frontend | React 18, Vite, Tailwind CSS |
 | Backend | FastAPI, Python 3.11 |
 | Database | MongoDB Atlas |
-| AI Engine | Groq API |
+| AI Engine | Gemini & Groq API |
 | Detection | scikit-learn (Isolation Forest), custom rule engine |
 | Deployment — Frontend | Vercel |
 | Deployment — Backend | Render |
@@ -118,6 +116,7 @@ SecuIntell/
 - Python 3.11+
 - MongoDB Atlas account
 - Groq API Key → https://console.groq.com/
+- Gemini API Key
 
 ### 1. Clone the repository
 ```bash
@@ -136,6 +135,7 @@ pip install -r requirements.txt
 Create a `.env` file inside `backend/`:
 ```
 GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxx
+GEMINI_API_KEY=xxxxxxxxxxxxxxxx
 MONGO_URI=mongodb+srv://user:password@cluster.mongodb.net/?retryWrites=true&w=majority
 DB_NAME=secuintell
 ENVIRONMENT=development
@@ -227,5 +227,16 @@ This project is licensed under the MIT License. See `LICENSE` for details.
 - [Groq](https://groq.com/) for powering intelligent alert analysis
 
 ---
+
+## ⚠️ Note
+
+- This project was mainly built to examine and try out AI developer tools and familiarizing with "Google for Developers" features, we premarily used GEMINI API and Google Cloud for storage but had to switch with other models due to free tier limits temporarily.
+
+ ## Future developments
+ - Future progress in this project includes:
+    - 1.Compliance Mapping Layer — Every SIEM evaluation is scored against CERT-In, RBI CSF, SEBI, IRDAI, and DPDP Act requirements.
+    - 2. Sector-Specific Matrices — Separate weighted scorecards for BFSI and SME/mid-market segments.
+    - 3. Gmail Alert notification — Sends an email via GMAIL API when a critical level incident is created.
+
 
 *Built with ❤️ for India's cybersecurity community.*
