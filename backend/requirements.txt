@@ -10,3 +10,6 @@ numpy==1.26.4
 scikit-learn==1.4.2
 joblib==1.4.2
 google-generativeai
+pydantic==2.7.4
+pydantic-core==2.18.4
+
