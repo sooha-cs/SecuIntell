@@ -541,8 +541,35 @@ function AlertsView({ alerts, onExplain }) {
 }
 
 // ── Incidents view ────────────────────────────────────────────────────────────
-function IncidentsView({ incidents }) {
+function IncidentsView({ incidents, setIncidents }) {
   const [filter, setFilter] = useState("ALL");
+  const [loadingId, setLoadingId] = useState(null);
+
+  const STATUS_CYCLE = { open: "investigating", investigating: "resolved", resolved: "open" };
+  const BTN_LABEL    = { open: "Investigate →", investigating: "Resolve ✓", resolved: "Reopen ↺" };
+
+  async function handleStatusChange(inc) {
+    const nextStatus = STATUS_CYCLE[inc.status] || "investigating";
+    const id = inc.incident_id || inc.id;
+    setLoadingId(id);
+    try {
+      const res = await fetch(
+        `${API}/incidents/${id}/status?status=${nextStatus}`,
+        { method: "PATCH", signal: AbortSignal.timeout(5000) }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      // Demo / offline mode — update local state anyway so the UI responds
+    } finally {
+      setIncidents(prev =>
+        prev.map(i => (i.incident_id === inc.incident_id || i.id === inc.id)
+          ? { ...i, status: nextStatus, last_seen: new Date().toISOString() }
+          : i
+        )
+      );
+      setLoadingId(null);
+    }
+  }
   const shown = incidents.filter(i => filter === "ALL" || i.status === filter || i.severity === filter);
 
   return (
@@ -576,7 +603,14 @@ function IncidentsView({ incidents }) {
             </div>
             <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8 }}>
               <span style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"var(--text-3)" }}>{inc.incident_id}</span>
-              <button className="btn" style={{ fontSize:11 }}>Investigate →</button>
+              <button
+                className={`btn${inc.status === "resolved" ? "" : " primary"}`}
+                style={{ fontSize:11, opacity: loadingId === (inc.incident_id || inc.id) ? 0.6 : 1 }}
+                disabled={loadingId === (inc.incident_id || inc.id)}
+                onClick={e => { e.stopPropagation(); handleStatusChange(inc); }}
+              >
+                {loadingId === (inc.incident_id || inc.id) ? "…" : BTN_LABEL[inc.status] || "Investigate →"}
+              </button>
             </div>
           </div>
         ))}
@@ -1254,7 +1288,7 @@ export default function App() {
   const VIEWS = {
     dashboard: <DashboardView alerts={alerts} incidents={incidents} onExplain={setExplainAlert} />,
     alerts:    <AlertsView    alerts={alerts} onExplain={setExplainAlert} />,
-    incidents: <IncidentsView incidents={incidents} />,
+    incidents: <IncidentsView incidents={incidents} setIncidents={setIncidents} />,
     live:      <LiveFeedView  alerts={alerts} />,
     mitre:     <MitreView />,
     fim:       <FIMView />,
