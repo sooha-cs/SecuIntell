@@ -8,8 +8,8 @@
 
 | Layer | URL |
 |---|---|
-| Frontend | https://secuintell.vercel.app |
-| Backend API | https://secuintell.onrender.com/docs |
+| Frontend | https:// |
+| Backend API | https:// |
 
 ---
 
@@ -210,8 +210,8 @@ This project was built as part of **solution-challenge-2026**.
 
 **Track:** Cybersecurity / AI for Security  
 **Team:** KeepSwimming  
-**Demo:** https://secuintell.vercel.app  
-**Backend:** https://secuintell.onrender.com/docs
+**Demo:** https://  
+**Backend:** https://
 
 ---
 
